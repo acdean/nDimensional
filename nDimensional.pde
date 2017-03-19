@@ -1,6 +1,14 @@
 // nDimensional
 
-static final int DIMENSION = 3;
+import com.jogamp.opengl.*;  // new jogl - 3.0b7
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+static final int DIMENSION = 6;
+static final int NUMBER_OF_LINES = 10;
+static final int NUMBER_OF_FACES = 10;
+static final boolean ADDITIVE = false;
+
 static final int COUNT = (1 << DIMENSION);
 static final int ROTATIONS = DIMENSION;
 static final int SCALE = 60;
@@ -8,12 +16,13 @@ static final float SZ = .5;
 static final float MAX_ANGLE = .05;
 static final float DEPTH = 6.0;
 boolean video = false;
+SimpleDateFormat format = new SimpleDateFormat("yyyyMMdd_HHmmss");
 
 Rotation[] rotations = new Rotation[ROTATIONS];
-
 PointN[] points = new PointN[COUNT];
 PVector[] twoD = new PVector[COUNT];
 ArrayList lines = new ArrayList();
+HashMap<String, Face> faces = new HashMap<String, Face>();
 
 void setup() {
 
@@ -25,13 +34,33 @@ void setup() {
     points[i] = new PointN(DIMENSION, i);
   }
 
-  // lines
+  // all lines
   for (int i = 0; i < COUNT; i++) { //<>//
     for (int d = 0 ; d < DIMENSION ; d++) {
       addLine(i, i ^ (0x1 << d));
     }
   }
 
+  // todo limit lines
+
+  // all faces
+  for (int i = 0 ; i < DIMENSION ; i++) {
+    for (int j = i + 1 ; j < DIMENSION ; j++) {
+      for (PointN point : points) {
+        String faceName = point.calcFaceName(i, j);
+        if (faces.get(faceName) == null) {
+          faces.put(faceName, new Face());
+        }
+        faces.get(faceName).add(point.index);
+      }
+    }
+  }
+
+  // todo limit faces
+
+  // disable unused points
+
+  // initialise rotations
   initAngles();
 }
 
@@ -39,6 +68,16 @@ void draw() {
 
   background(0);
   //smooth();
+
+  if (ADDITIVE) {
+    // PJOGL 2.2.1, 30b7
+    GL gl = ((PJOGL)beginPGL()).gl.getGL();
+
+    // additive blending
+    gl.glEnable(GL.GL_BLEND);
+    gl.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE);
+    gl.glDisable(GL.GL_DEPTH_TEST);
+  }
 
   translate(width / 2, height / 2);
   scale(SCALE, SCALE);
@@ -48,28 +87,34 @@ void draw() {
     rotations[i].update();
   }
 
-  // transform each point - apply 3 lots of perspective losing a dimension each time
+  // transform each (enabled) point - apply n-2 lots of perspective losing a dimension each time
   for (int i = 0; i < COUNT; i++) {
-    PointN p = points[i].copy();
-    // apply all rotations
-    for (int r = 0 ; r < ROTATIONS ; r++) {
-      p = rotations[r].rotate(p);
+    if (points[i].enabled) {
+      PointN p = points[i].copy();
+      // apply all rotations
+      for (int r = 0 ; r < ROTATIONS ; r++) {
+        p = rotations[r].rotate(p);
+      }
+      // all perspectives (reduce to 2d so 1 less than DIMENSION)
+      for (int d = 0 ; d < DIMENSION - 2 ; d++) {
+        p.perspective();
+      }
+      // store the 2d result
+      twoD[i] = new PVector(p.x(), p.y());
     }
-    // all perspectives (reduce to 2d so 1 less than DIMENSION)
-    for (int d = 0 ; d < DIMENSION - 2 ; d++) {
-      p.perspective();
-    }
-    // store the 2d result
-    twoD[i] = new PVector(p.x(), p.y());
   }
 
   // draw all lines
-  LineN l = null;
   for (int i = 0; i < lines.size(); i++) {
-    l = (LineN)lines.get(i);
+    LineN l = (LineN)lines.get(i);
     strokeWeight(10.0 / SCALE);
     stroke(l.c);
     line(twoD[l.p0].x, twoD[l.p0].y, twoD[l.p1].x, twoD[l.p1].y);
+  }
+
+  // draw all faces
+  for (Face face : faces.values()) {
+    face.draw();
   }
   
   if (video) {
@@ -80,13 +125,13 @@ void draw() {
   }
 }
 
-
 // n dimensional point
 // each is a combination of n +/- 1
 class PointN {
   float[] p;
   int dim;
   int index;
+  boolean enabled;
 
   PointN(int dim) {
     this(dim, -1);
@@ -107,6 +152,7 @@ class PointN {
     if (index != 0) {
       //println(this);
     }
+    enabled = true;
   }
 
   float x() {
@@ -147,6 +193,25 @@ class PointN {
     }
     return s.toString();
   }
+
+  // used to generate a name for the face, for hashing purposes.
+  // things on the same face, where everything but points i and j are the same
+  // should get the same face name.
+  // facenames are like -+XX, X++X, should have two Xs and +/- to indicate sign. 
+  String calcFaceName(int i, int j) {
+    StringBuilder s = new StringBuilder();
+    for (int d = 0 ; d < DIMENSION ; d++) {
+      if (d == i || d == j) {
+        s.append("X");
+      } else if (p[d] == -SZ) {
+        s.append("-");
+      } else {
+        s.append("+");
+      }
+    }
+    println("Point[" + index + "] FaceName[" + s.toString() + "]");
+    return s.toString();
+  }
 }
 
 private void addLine(int i, int j) {
@@ -173,6 +238,15 @@ public class LineN {
     this.p0 = p0;
     this.p1 = p1;
     c = color(127 + random(128), 127 + random(128), 127 + random(128));
+  }
+}
+
+void keyPressed() {
+  if (key == 's') {
+    saveFrame("frame####.png");
+  }
+  if (key == 'e') {
+    export = true;
   }
 }
 
@@ -248,5 +322,48 @@ class Rotation {
     }
     println();
     println();
+  }
+}
+
+class Face {
+  int MINCOL = 0;
+  int MAXCOL = 256;
+  int TRANS = 200;
+  ArrayList<Integer> points = new ArrayList<Integer>(4);
+  color c;
+  boolean display = false;
+  
+  Face() {
+    // transparent color
+    c = color(random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), TRANS);
+    c = color(random(MINCOL, MAXCOL));
+    c = 128 * (int)random(3);
+    c = color(c, c, c);
+    c = 0xff000000 | 0xff << (8 * (int)random(3));
+    if (random(100) < 10) { // changes with DIMENSION
+      display = true;
+    }
+  }
+  
+  void add(int i) {
+    points.add(i);
+  }
+
+  // how to make sure this is a square and not a bowtie
+  // A-B A-D A-B
+  //  /  | | | |
+  // C-D B-C D-C
+  
+  void draw() {
+    if (display) {
+      beginShape(QUAD);
+      fill(c);
+      noStroke();
+      vertex(twoD[points.get(0)].x, twoD[points.get(0)].y);
+      vertex(twoD[points.get(1)].x, twoD[points.get(1)].y);
+      vertex(twoD[points.get(3)].x, twoD[points.get(3)].y);
+      vertex(twoD[points.get(2)].x, twoD[points.get(2)].y);
+      endShape(CLOSE);
+    }
   }
 }
