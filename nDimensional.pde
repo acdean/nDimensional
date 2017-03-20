@@ -1,17 +1,21 @@
 // nDimensional
 
-import com.jogamp.opengl.*;  // new jogl - 3.0b7
+//import com.jogamp.opengl.*;  // new jogl - 3.0b7
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 static final int DIMENSION = 6;
-static final int NUMBER_OF_LINES = 10;
-static final int NUMBER_OF_FACES = 10;
+static final int NUMBER_OF_LINES = 0;
+static final int NUMBER_OF_FACES = 20;
 static final boolean ADDITIVE = false;
 
 static final int COUNT = (1 << DIMENSION);
 static final int ROTATIONS = DIMENSION;
-static final int SCALE = 60;
+static final int SCALE = 200;
 static final float SZ = .5;
 static final float MAX_ANGLE = .05;
 static final float DEPTH = 6.0;
@@ -21,12 +25,12 @@ SimpleDateFormat format = new SimpleDateFormat("yyyyMMdd_HHmmss");
 Rotation[] rotations = new Rotation[ROTATIONS];
 PointN[] points = new PointN[COUNT];
 PVector[] twoD = new PVector[COUNT];
-ArrayList lines = new ArrayList();
+List<LineN> lines = new ArrayList<LineN>();
 HashMap<String, Face> faces = new HashMap<String, Face>();
 
 void setup() {
 
-  size(640, 360, P3D);
+  size(1000, 700, P2D);
   frameRate(20);
   
   // points
@@ -40,8 +44,15 @@ void setup() {
       addLine(i, i ^ (0x1 << d));
     }
   }
+  println("There are " + lines.size() + " lines");
 
-  // todo limit lines
+  // limit lines
+  if (lines.size() > NUMBER_OF_LINES) {
+    // shuffle and crop
+    Collections.shuffle(lines);
+    lines = lines.subList(0, NUMBER_OF_LINES);
+    println("Lines cropped to " + lines.size() + " lines");
+  }
 
   // all faces
   for (int i = 0 ; i < DIMENSION ; i++) {
@@ -55,8 +66,23 @@ void setup() {
       }
     }
   }
+  println("There are " + faces.size() + " faces");
 
-  // todo limit faces
+  // limit faces
+  if (faces.size() > NUMBER_OF_FACES) {
+    // shuffle and crop
+    Set<String> keys = faces.keySet(); //<>//
+    List<String> keyList = new ArrayList<String>(keys);
+    Collections.shuffle(keyList);
+    keyList = keyList.subList(NUMBER_OF_FACES, keyList.size());
+    println("Faces be deleted " + keyList.size());
+    for (String key : keyList) {
+      faces.remove(key);
+    }
+    keys = null;
+    keyList = null;
+    println("There are now " + faces.size() + " faces");
+  }
 
   // disable unused points
 
@@ -69,15 +95,15 @@ void draw() {
   background(0);
   //smooth();
 
-  if (ADDITIVE) {
-    // PJOGL 2.2.1, 30b7
-    GL gl = ((PJOGL)beginPGL()).gl.getGL();
+  //if (ADDITIVE) {
+  //  // PJOGL 2.2.1, 30b7
+  //  GL gl = ((PJOGL)beginPGL()).gl.getGL();
 
-    // additive blending
-    gl.glEnable(GL.GL_BLEND);
-    gl.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE);
-    gl.glDisable(GL.GL_DEPTH_TEST);
-  }
+  //  // additive blending
+  //  gl.glEnable(GL.GL_BLEND);
+  //  gl.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE);
+  //  gl.glDisable(GL.GL_DEPTH_TEST);
+  //}
 
   translate(width / 2, height / 2);
   scale(SCALE, SCALE);
@@ -109,7 +135,7 @@ void draw() {
     LineN l = (LineN)lines.get(i);
     strokeWeight(10.0 / SCALE);
     stroke(l.c);
-    line(twoD[l.p0].x, twoD[l.p0].y, twoD[l.p1].x, twoD[l.p1].y);
+//    line(twoD[l.p0].x, twoD[l.p0].y, twoD[l.p1].x, twoD[l.p1].y);
   }
 
   // draw all faces
@@ -209,7 +235,7 @@ class PointN {
         s.append("+");
       }
     }
-    println("Point[" + index + "] FaceName[" + s.toString() + "]");
+    //println("Point[" + index + "] FaceName[" + s.toString() + "]");
     return s.toString();
   }
 }
@@ -245,9 +271,6 @@ void keyPressed() {
   if (key == 's') {
     saveFrame("frame####.png");
   }
-  if (key == 'e') {
-    export = true;
-  }
 }
 
 void mouseReleased() {
@@ -281,7 +304,7 @@ class Rotation {
     }
     angle += delta;
     setAngle(angle);
-    printMatrix();
+    //printMatrix();
   }
 
   void update() {
@@ -334,15 +357,7 @@ class Face {
   boolean display = false;
   
   Face() {
-    // transparent color
-    c = color(random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), TRANS);
-    c = color(random(MINCOL, MAXCOL));
-    c = 128 * (int)random(3);
-    c = color(c, c, c);
-    c = 0xff000000 | 0xff << (8 * (int)random(3));
-    if (random(100) < 10) { // changes with DIMENSION
-      display = true;
-    }
+    c = randomColour();
   }
   
   void add(int i) {
@@ -355,15 +370,23 @@ class Face {
   // C-D B-C D-C
   
   void draw() {
-    if (display) {
-      beginShape(QUAD);
-      fill(c);
-      noStroke();
-      vertex(twoD[points.get(0)].x, twoD[points.get(0)].y);
-      vertex(twoD[points.get(1)].x, twoD[points.get(1)].y);
-      vertex(twoD[points.get(3)].x, twoD[points.get(3)].y);
-      vertex(twoD[points.get(2)].x, twoD[points.get(2)].y);
-      endShape(CLOSE);
-    }
+    beginShape(QUAD);
+    fill(c);
+    noStroke();
+    vertex(twoD[points.get(0)].x, twoD[points.get(0)].y);
+    vertex(twoD[points.get(1)].x, twoD[points.get(1)].y);
+    vertex(twoD[points.get(3)].x, twoD[points.get(3)].y);
+    vertex(twoD[points.get(2)].x, twoD[points.get(2)].y);
+    endShape(CLOSE);
+  }
+  
+  color randomColour() {
+    color c;
+    c = color(random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), TRANS);
+    c = color(random(MINCOL, MAXCOL));
+    c = 128 * (int)random(3);
+    c = color(c, c, c);
+    c = 0xff000000 | 0xff << (8 * (int)random(3));
+    return c;
   }
 }
