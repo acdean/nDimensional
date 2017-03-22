@@ -1,6 +1,6 @@
 // nDimensional
 
-//import com.jogamp.opengl.*;  // new jogl - 3.0b7
+import com.jogamp.opengl.*;  // new jogl - 3.0b7
 import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Date;
@@ -10,15 +10,15 @@ import java.util.Set;
 
 static final int DIMENSION = 6;
 static final int NUMBER_OF_LINES = 0;
-static final int NUMBER_OF_FACES = 20;
-static final boolean ADDITIVE = false;
+static final int NUMBER_OF_FACES = 30;
+static final boolean ADDITIVE = true;
 
 static final int COUNT = (1 << DIMENSION);
 static final int ROTATIONS = DIMENSION;
-static final int SCALE = 200;
-static final float SZ = .5;
+static final float SZ = 100;
+static final float STROKE = 5;
 static final float MAX_ANGLE = .05;
-static final float DEPTH = 6.0;
+static final float DEPTH = 1000.0;
 boolean video = false;
 SimpleDateFormat format = new SimpleDateFormat("yyyyMMdd_HHmmss");
 
@@ -30,16 +30,17 @@ HashMap<String, Face> faces = new HashMap<String, Face>();
 
 void setup() {
 
-  size(1000, 700, P2D);
+  size(640, 360, P2D);
   frameRate(20);
   
   // points
   for (int i = 0 ; i < COUNT ; i++) {
     points[i] = new PointN(DIMENSION, i);
   }
+  println("There are " + points.length + " points");
 
-  // all lines
-  for (int i = 0; i < COUNT; i++) { //<>//
+  // all lines //<>//
+  for (int i = 0; i < COUNT; i++) {
     for (int d = 0 ; d < DIMENSION ; d++) {
       addLine(i, i ^ (0x1 << d));
     }
@@ -85,6 +86,28 @@ void setup() {
   }
 
   // disable unused points
+  // mark all as disabled
+  for (PointN point : points) {
+    point.enabled = false;
+  }
+  // re-enable all those referenced by faces
+  for (Face face : faces.values()) {
+    for (Integer point : face.points) {
+      points[point].enabled = true;
+    }
+  }
+  // re-enable all those referenced by lines
+  for (LineN line : lines) {
+    points[line.p0].enabled = true;
+    points[line.p1].enabled = true;
+  }
+  int count = 0;
+  for (PointN point : points) {
+    if (point.enabled) {
+      count++;
+    }
+  }
+  println("Points Enabled: " + count);
 
   // initialise rotations
   initAngles();
@@ -95,18 +118,17 @@ void draw() {
   background(0);
   //smooth();
 
-  //if (ADDITIVE) {
-  //  // PJOGL 2.2.1, 30b7
-  //  GL gl = ((PJOGL)beginPGL()).gl.getGL();
+  if (ADDITIVE) {
+   // PJOGL 2.2.1, 30b7
+   GL gl = ((PJOGL)beginPGL()).gl.getGL();
 
-  //  // additive blending
-  //  gl.glEnable(GL.GL_BLEND);
-  //  gl.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE);
-  //  gl.glDisable(GL.GL_DEPTH_TEST);
-  //}
+   // additive blending
+   gl.glEnable(GL.GL_BLEND);
+   gl.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE);
+   gl.glDisable(GL.GL_DEPTH_TEST);
+  }
 
   translate(width / 2, height / 2);
-  scale(SCALE, SCALE);
 
   // update angles
   for (int i = 0 ; i < ROTATIONS ; i++) {
@@ -133,9 +155,9 @@ void draw() {
   // draw all lines
   for (int i = 0; i < lines.size(); i++) {
     LineN l = (LineN)lines.get(i);
-    strokeWeight(10.0 / SCALE);
+    strokeWeight(STROKE);
     stroke(l.c);
-//    line(twoD[l.p0].x, twoD[l.p0].y, twoD[l.p1].x, twoD[l.p1].y);
+    line(twoD[l.p0].x, twoD[l.p0].y, twoD[l.p1].x, twoD[l.p1].y);
   }
 
   // draw all faces
@@ -244,9 +266,7 @@ private void addLine(int i, int j) {
   // only add those that haven't already been added
   // ie don't add b->a if a->b is already there
   if (i < j) {
-    if (random(1000) < 1000) { // new
-      lines.add(new LineN(i, j));
-    }
+    lines.add(new LineN(i, j));
   }
 }
 
@@ -263,7 +283,7 @@ public class LineN {
   public LineN(int p0, int p1) {
     this.p0 = p0;
     this.p1 = p1;
-    c = color(127 + random(128), 127 + random(128), 127 + random(128));
+    c = randomColour();
   }
 }
 
@@ -349,9 +369,6 @@ class Rotation {
 }
 
 class Face {
-  int MINCOL = 0;
-  int MAXCOL = 256;
-  int TRANS = 200;
   ArrayList<Integer> points = new ArrayList<Integer>(4);
   color c;
   boolean display = false;
@@ -379,14 +396,17 @@ class Face {
     vertex(twoD[points.get(2)].x, twoD[points.get(2)].y);
     endShape(CLOSE);
   }
-  
-  color randomColour() {
-    color c;
-    c = color(random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), TRANS);
-    c = color(random(MINCOL, MAXCOL));
-    c = 128 * (int)random(3);
-    c = color(c, c, c);
-    c = 0xff000000 | 0xff << (8 * (int)random(3));
-    return c;
-  }
+}
+
+static final int MINCOL = 0;
+static final int MAXCOL = 256;
+static final int TRANS = 200;
+color randomColour() {
+  color c;
+  c = color(random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), TRANS);
+  c = color(random(MINCOL, MAXCOL));
+  c = 128 * (int)random(3);
+  c = color(c, c, c);
+  c = 0xff000000 | 0xff << (8 * (int)random(3));
+  return c;
 }
