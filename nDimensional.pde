@@ -1,4 +1,6 @@
 // nDimensional
+// acd 03-2017
+// TODO randomise faces better
 
 import com.jogamp.opengl.*;  // new jogl - 3.0b7
 import java.text.SimpleDateFormat;
@@ -8,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-static final int DIMENSION = 6;
+static final int DIMENSION = 8; // 15 is ok, 20 is too much
 static final int NUMBER_OF_LINES = 0;
 static final int NUMBER_OF_FACES = 30;
 static final boolean ADDITIVE = true;
@@ -18,7 +20,7 @@ static final int ROTATIONS = DIMENSION;
 static final float SZ = 100;
 static final float STROKE = 5;
 static final float MAX_ANGLE = .05;
-static final float DEPTH = 1000.0;
+static final float DEPTH = 1500.0;
 boolean video = false;
 SimpleDateFormat format = new SimpleDateFormat("yyyyMMdd_HHmmss");
 
@@ -30,7 +32,7 @@ HashMap<String, Face> faces = new HashMap<String, Face>();
 
 void setup() {
 
-  size(640, 360, P2D);
+  size(800, 450, P2D);
   frameRate(20);
   
   // points
@@ -40,9 +42,11 @@ void setup() {
   println("There are " + points.length + " points");
 
   // all lines //<>//
-  for (int i = 0; i < COUNT; i++) {
-    for (int d = 0 ; d < DIMENSION ; d++) {
-      addLine(i, i ^ (0x1 << d));
+  if (NUMBER_OF_LINES != 0) {
+    for (int i = 0; i < COUNT; i++) {
+      for (int d = 0 ; d < DIMENSION ; d++) {
+        addLine(i, i ^ (0x1 << d));
+      }
     }
   }
   println("There are " + lines.size() + " lines");
@@ -55,6 +59,7 @@ void setup() {
     println("Lines cropped to " + lines.size() + " lines");
   }
 
+  println("Faces");
   // all faces
   for (int i = 0 ; i < DIMENSION ; i++) {
     for (int j = i + 1 ; j < DIMENSION ; j++) {
@@ -272,7 +277,7 @@ private void addLine(int i, int j) {
 
 void initAngles() {
   for (int i = 0 ; i < ROTATIONS ; i++) {
-    rotations[i] = new Rotation(0);
+    rotations[i] = new Rotation(random(TWO_PI));
   }
 }
 
@@ -289,7 +294,7 @@ public class LineN {
 
 void keyPressed() {
   if (key == 's') {
-    saveFrame("frame####.png");
+    saveFrame("nDimensional_####.png");
   }
 }
 
@@ -300,7 +305,7 @@ void mouseReleased() {
 void mousePressed() {
   initAngles();
   //  noLoop();
-  saveFrame("nDimension_####.png");
+  //saveFrame("nDimension_####.png");
 }
 
 class Rotation {
@@ -403,10 +408,13 @@ static final int MAXCOL = 256;
 static final int TRANS = 200;
 color randomColour() {
   color c;
+  // completely random
   c = color(random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), random(MINCOL, MAXCOL), TRANS);
+  // grey
   c = color(random(MINCOL, MAXCOL));
-  c = 128 * (int)random(3);
-  c = color(c, c, c);
+  // 0x0, 0x3, 0x6 etc
+  c = 0xff000000 | (0x333333 * (int)random(6));
+  // r / g / b
   c = 0xff000000 | 0xff << (8 * (int)random(3));
   return c;
 }
